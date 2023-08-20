@@ -16,13 +16,13 @@ const addSchema = Joi.object({
     .required(),
   email: Joi.string().email().required(),
   phone: Joi.string().required(),
-}).unknown(false);
+});
 
 const editSchema = Joi.object({
   name: Joi.string().pattern(/^[A-Za-z\s]+$/),
   email: Joi.string().email(),
   phone: Joi.string(),
-});
+}).unknown(false);
 
 router.get("/", async (req, res, next) => {
   try {
