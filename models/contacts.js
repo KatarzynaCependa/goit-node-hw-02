@@ -17,8 +17,7 @@ const listContacts = async () => {
 
 const getContactById = async (contactId) => {
   try {
-    const data = await fs.readFile(contactsPath);
-    const contacts = JSON.parse(data);
+    const contacts = await listContacts();
     const foundId = contacts.find((contact) => contact.id === contactId);
 
     return foundId;
@@ -29,8 +28,7 @@ const getContactById = async (contactId) => {
 
 const removeContact = async (contactId) => {
   try {
-    const data = await fs.readFile(contactsPath);
-    const contacts = JSON.parse(data);
+    const contacts = await listContacts();
 
     const initialLength = contacts.length;
     const filteredContacts = contacts.filter(
@@ -53,8 +51,7 @@ const addContact = async (body) => {
     const { name, email, phone } = body;
     const newContact = { id: nanoid(), name, email, phone };
 
-    const data = await fs.readFile(contactsPath);
-    const contacts = JSON.parse(data);
+    const contacts = await listContacts();
     contacts.push(newContact);
 
     await fs.writeFile(contactsPath, JSON.stringify(contacts));
@@ -66,8 +63,7 @@ const addContact = async (body) => {
 
 const updateContact = async (contactId, body) => {
   try {
-    const data = await fs.readFile(contactsPath);
-    const contacts = JSON.parse(data);
+    const contacts = await listContacts();
 
     const index = contacts.findIndex((contact) => contact.id === contactId);
 
