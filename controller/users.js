@@ -121,10 +121,31 @@ const logout = async (req, res, next) => {
   }
 };
 
+const current = async (req, res, next) => {
+  try {
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
+
+    const { email, subscription } = user;
+
+    return res.status(200).json({
+      user: {
+        email,
+        subscription,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
   auth,
   logout,
-  // current
+  current,
 };
