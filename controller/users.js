@@ -1,8 +1,8 @@
 const Joi = require("joi");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const secret = "secret word";
 const passport = require("passport");
+const secret = process.env.SECRET;
 const { findUser, createUser } = require("../service");
 
 const signUpSchema = Joi.object({
@@ -92,6 +92,7 @@ const auth = (req, res, next) => {
     if (!user || err) {
       return res.status(401).json({
         message: "Not authorized",
+        error: err,
       });
     }
 
@@ -100,8 +101,30 @@ const auth = (req, res, next) => {
   })(req, res, next);
 };
 
+const logout = async (req, res, next) => {
+  try {
+    const { id } = req.user;
+    const { user } = req;
+
+    if (!id) {
+      return res.status(401).json({
+        message: "Not authorized",
+      });
+    }
+
+    user.token = null;
+    await user.save();
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
   auth,
+  logout,
+  // current
 };
