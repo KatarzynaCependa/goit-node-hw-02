@@ -2,7 +2,7 @@ const Joi = require("joi");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const secret = "secret word";
-// const passport = require("passport");
+const passport = require("passport");
 const { findUser, createUser } = require("../service");
 
 const signUpSchema = Joi.object({
@@ -22,12 +22,14 @@ const signup = async (req, res, next) => {
     const userValidationResult = signUpSchema.validate({ email, password });
 
     if (userValidationResult.error) {
-      res.status(400).json({ message: userValidationResult.error.message });
+      return res
+        .status(400)
+        .json({ message: userValidationResult.error.message });
     }
 
     const existingUser = await findUser(email);
     if (existingUser) {
-      res.status(409).json({ message: "Email is already in use" });
+      return res.status(409).json({ message: "Email is already in use" });
     }
 
     const salt = await bcrypt.genSalt();
@@ -54,11 +56,13 @@ const login = async (req, res, next) => {
     const userValidationResult = logInSchema.validate({ email, password });
 
     if (userValidationResult.error) {
-      res.status(400).json({ message: userValidationResult.error.message });
+      return res
+        .status(400)
+        .json({ message: userValidationResult.error.message });
     }
 
     if (!existingUser.validPassword(password)) {
-      res.status(401).json({ message: "Email or password is wrong" });
+      return res.status(401).json({ message: "Email or password is wrong" });
     }
 
     const payload = {
@@ -71,7 +75,7 @@ const login = async (req, res, next) => {
     existingUser.token = token;
     await existingUser.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       token,
       user: {
         email: existingUser.email,
@@ -83,7 +87,21 @@ const login = async (req, res, next) => {
   }
 };
 
+const auth = (req, res, next) => {
+  passport.authenticate("jwt", { session: false }, (err, user) => {
+    if (!user || err) {
+      return res.status(401).json({
+        message: "Not authorized",
+      });
+    }
+
+    req.user = user;
+    next();
+  })(req, res, next);
+};
+
 module.exports = {
   signup,
   login,
+  auth,
 };
