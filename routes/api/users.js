@@ -4,7 +4,7 @@ const ctrlUser = require("../../controller/users");
 
 router.post("/signup", ctrlUser.signup);
 
-// router.post("/login", ctrlUser.login);
+router.post("/login", ctrlUser.login);
 
 // router.get("/logout", ctrlUser.logout);
 
