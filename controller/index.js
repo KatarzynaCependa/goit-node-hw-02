@@ -1,7 +1,7 @@
 const service = require("../service");
 const Joi = require("joi");
 
-const addSchema = Joi.object({
+const addContactSchema = Joi.object({
   name: Joi.string()
     .pattern(/^[A-Za-z\s]+$/)
     .required(),
@@ -10,7 +10,7 @@ const addSchema = Joi.object({
   favorite: Joi.boolean().required(),
 });
 
-const editSchema = Joi.object({
+const editContactSchema = Joi.object({
   name: Joi.string().pattern(/^[A-Za-z\s]+$/),
   email: Joi.string().email(),
   phone: Joi.string(),
@@ -64,7 +64,7 @@ const remove = async (req, res, next) => {
 const create = async (req, res, next) => {
   const { name, email, phone } = req.body;
   try {
-    const validationResult = addSchema.validate({ name, email, phone });
+    const validationResult = addContactSchema.validate({ name, email, phone });
 
     if (validationResult.error) {
       res.status(400).send({ message: "All fields must be completed!" });
@@ -82,7 +82,7 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   const body = req.body;
   const { contactId } = req.params;
-  const validationResult = editSchema.validate(body);
+  const validationResult = editContactSchema.validate(body);
 
   if (validationResult.error) {
     res.status(400).json({ message: "Missing fields" });
