@@ -2,8 +2,19 @@ const Joi = require("joi");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const passport = require("passport");
+const gravatar = require("gravatar");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs").promises;
 const secret = process.env.SECRET;
 const { findUser, createUser } = require("../service");
+const uploadDir = path.join(process.cwd(), "tmp");
+// tworzy ścieżkę łącząc bieżący katalog roboczy (working directory) i folder 'tmp'
+const createPublic = path.join(process.cwd(), "public");
+// tworzy ścieżkę łącząc bieżący katalog roboczy (working directory) i folder 'public'
+const storeImage = path.join(createPublic, "avatars");
+// wskazuje na folder 'avatars' wewnątrz folderu 'public'
+const Jimp = require("jimp");
 
 const signUpSchema = Joi.object({
   email: Joi.string().email().required(),
@@ -34,8 +45,13 @@ const signup = async (req, res, next) => {
 
     const salt = await bcrypt.genSalt();
     const hashedPassword = await bcrypt.hash(password, salt);
+    const url = gravatar.url(email, { s: "200" });
 
-    const newUser = await createUser({ email, password: hashedPassword });
+    const newUser = await createUser({
+      email,
+      password: hashedPassword,
+      avatarURL: url,
+    });
 
     return res.status(201).json({
       message: "User created",
@@ -142,10 +158,63 @@ const current = async (req, res, next) => {
   }
 };
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+  limits: {
+    fileSize: 1048576,
+  },
+});
+
+const upload = multer({
+  storage: storage,
+});
+
+const avatars = async (req, res, next) => {
+  const { path: temporaryName, originalname } = req.file;
+  // req.file.path (pełna ścieżka do ładowanego pliku) zostaje przypisana do zmiennej temporaryName,
+  // a req.file.originalname do zmiennej originalname
+  const fileName = path.join(uploadDir, originalname);
+  // pełna ścieżka do docelowego miejsca, gdzie plik zostanie zapisany ('public/avatars')
+  const { token, email } = req.user;
+  const { user } = req;
+  const username = email.split("@")[0];
+  const newAvatarPath = `${storeImage}/${username}.jpg`;
+
+  try {
+    if (!token) {
+      return res.status(401).json({
+        message: "Not authorized",
+      });
+    }
+
+    await fs.rename(temporaryName, fileName);
+    const avatar = await Jimp.read(fileName);
+    avatar.resize(250, 250).write(newAvatarPath);
+    user.avatarURL = newAvatarPath;
+    await user.save();
+    const { avatarURL } = user;
+
+    return res.status(200).json({ avatarURL });
+  } catch (error) {
+    await fs.unlink(fileName);
+    console.error(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
   auth,
   logout,
   current,
+  avatars,
+  upload,
+  uploadDir,
+  storeImage,
+  createPublic,
 };

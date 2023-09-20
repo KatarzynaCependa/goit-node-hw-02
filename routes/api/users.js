@@ -10,4 +10,11 @@ router.get("/logout", ctrlUser.auth, ctrlUser.logout);
 
 router.get("/current", ctrlUser.auth, ctrlUser.current);
 
+router.patch(
+  "/avatars",
+  ctrlUser.auth,
+  ctrlUser.upload.single("picture"),
+  ctrlUser.avatars
+);
+
 module.exports = router;

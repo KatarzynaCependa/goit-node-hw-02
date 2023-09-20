@@ -31,8 +31,8 @@ const updateStatusContact = (id, fields) => {
 
 const findUser = async (email) => await User.findOne({ email });
 
-const createUser = ({ email, password }) => {
-  return User.create({ email, password });
+const createUser = ({ email, password, avatarURL }) => {
+  return User.create({ email, password, avatarURL });
 };
 
 module.exports = {
