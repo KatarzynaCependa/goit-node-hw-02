@@ -31,8 +31,18 @@ const updateStatusContact = (id, fields) => {
 
 const findUser = async (email) => await User.findOne({ email });
 
-const createUser = ({ email, password, avatarURL }) => {
-  return User.create({ email, password, avatarURL });
+const findUserByToken = async (verificationToken) =>
+  await User.findOne({ verificationToken });
+
+const createUser = ({ email, password, avatarURL, verificationToken }) => {
+  return User.create({ email, password, avatarURL, verificationToken });
+};
+
+const verifyUser = ({ verificationToken }) => {
+  return User.findOneAndUpdate(
+    { verificationToken },
+    { $set: { verificationToken: null, verify: true } }
+  );
 };
 
 module.exports = {
@@ -44,4 +54,6 @@ module.exports = {
   updateStatusContact,
   findUser,
   createUser,
+  verifyUser,
+  findUserByToken,
 };

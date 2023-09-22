@@ -6,15 +6,22 @@ const gravatar = require("gravatar");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs").promises;
-const secret = process.env.SECRET;
-const { findUser, createUser } = require("../service");
-const uploadDir = path.join(process.cwd(), "tmp");
-// tworzy ścieżkę łącząc bieżący katalog roboczy (working directory) i folder 'tmp'
-const createPublic = path.join(process.cwd(), "public");
-// tworzy ścieżkę łącząc bieżący katalog roboczy (working directory) i folder 'public'
-const storeImage = path.join(createPublic, "avatars");
-// wskazuje na folder 'avatars' wewnątrz folderu 'public'
+const sgMail = require("@sendgrid/mail");
 const Jimp = require("jimp");
+const { nanoid } = require("nanoid");
+const secret = process.env.SECRET;
+
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+const {
+  findUser,
+  createUser,
+  verifyUser,
+  findUserByToken,
+} = require("../service");
+const uploadDir = path.join(process.cwd(), "tmp");
+const createPublic = path.join(process.cwd(), "public");
+const storeImage = path.join(createPublic, "avatars");
 
 const signUpSchema = Joi.object({
   email: Joi.string().email().required(),
@@ -24,13 +31,17 @@ const signUpSchema = Joi.object({
 const logInSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().required(),
+  verify: Joi.boolean(),
 });
 
 const signup = async (req, res, next) => {
   const { email, password } = req.body;
 
   try {
-    const userValidationResult = signUpSchema.validate({ email, password });
+    const userValidationResult = signUpSchema.validate({
+      email,
+      password,
+    });
 
     if (userValidationResult.error) {
       return res
@@ -51,7 +62,24 @@ const signup = async (req, res, next) => {
       email,
       password: hashedPassword,
       avatarURL: url,
+      verificationToken: nanoid(),
     });
+
+    const msg = {
+      to: "email.do.nauki3@gmail.com",
+      from: "email.do.nauki3@gmail.com",
+      subject: "Please verify your email address",
+      text: `Click the following link to verify your email: http://localhost:3000/api/users/verify/${newUser.verificationToken}`,
+    };
+
+    sgMail
+      .send(msg)
+      .then(() => {
+        console.log("Email sent");
+      })
+      .catch((error) => {
+        console.log(error);
+      });
 
     return res.status(201).json({
       message: "User created",
@@ -69,7 +97,11 @@ const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const existingUser = await findUser(email);
-    const userValidationResult = logInSchema.validate({ email, password });
+    const userValidationResult = logInSchema.validate({
+      email,
+      password,
+      verify: existingUser.verify,
+    });
 
     if (userValidationResult.error) {
       return res
@@ -206,6 +238,23 @@ const avatars = async (req, res, next) => {
   }
 };
 
+const verify = async (req, res, next) => {
+  try {
+    const { verificationToken } = req.params;
+
+    const existingUser = await findUserByToken(verificationToken);
+    if (!existingUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await verifyUser({ verificationToken });
+
+    return res.status(200).json({ message: "Verification successful" });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
@@ -217,4 +266,5 @@ module.exports = {
   uploadDir,
   storeImage,
   createPublic,
+  verify,
 };
