@@ -6,15 +6,22 @@ const gravatar = require("gravatar");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs").promises;
-const secret = process.env.SECRET;
-const { findUser, createUser } = require("../service");
-const uploadDir = path.join(process.cwd(), "tmp");
-// tworzy ścieżkę łącząc bieżący katalog roboczy (working directory) i folder 'tmp'
-const createPublic = path.join(process.cwd(), "public");
-// tworzy ścieżkę łącząc bieżący katalog roboczy (working directory) i folder 'public'
-const storeImage = path.join(createPublic, "avatars");
-// wskazuje na folder 'avatars' wewnątrz folderu 'public'
+const sgMail = require("@sendgrid/mail");
 const Jimp = require("jimp");
+const { nanoid } = require("nanoid");
+const secret = process.env.SECRET;
+
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+const {
+  findUser,
+  findUserByToken,
+  createUser,
+  verifyUser,
+} = require("../service");
+const uploadDir = path.join(process.cwd(), "tmp");
+const createPublic = path.join(process.cwd(), "public");
+const storeImage = path.join(createPublic, "avatars");
 
 const signUpSchema = Joi.object({
   email: Joi.string().email().required(),
@@ -26,11 +33,35 @@ const logInSchema = Joi.object({
   password: Joi.string().required(),
 });
 
+const recheckUserSchema = Joi.object({
+  email: Joi.string().email().required(),
+});
+
+const sendVerificationEmail = async (email, verificationToken) => {
+  const tokenUrl = `http://localhost:3000/api/users/verify/${verificationToken}`;
+
+  const msg = {
+    to: email,
+    from: "email.do.nauki3@gmail.com",
+    subject: "Please verify your email address",
+    text: `Click the following link to verify your email: ${tokenUrl}`,
+  };
+  try {
+    await sgMail.send(msg);
+    console.log("Email sent succesfully");
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 const signup = async (req, res, next) => {
   const { email, password } = req.body;
 
   try {
-    const userValidationResult = signUpSchema.validate({ email, password });
+    const userValidationResult = signUpSchema.validate({
+      email,
+      password,
+    });
 
     if (userValidationResult.error) {
       return res
@@ -46,12 +77,16 @@ const signup = async (req, res, next) => {
     const salt = await bcrypt.genSalt();
     const hashedPassword = await bcrypt.hash(password, salt);
     const url = gravatar.url(email, { s: "200" });
+    const verificationToken = nanoid();
 
     const newUser = await createUser({
       email,
       password: hashedPassword,
       avatarURL: url,
+      verificationToken,
     });
+
+    await sendVerificationEmail(email, verificationToken);
 
     return res.status(201).json({
       message: "User created",
@@ -69,7 +104,10 @@ const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const existingUser = await findUser(email);
-    const userValidationResult = logInSchema.validate({ email, password });
+    const userValidationResult = logInSchema.validate({
+      email,
+      password,
+    });
 
     if (userValidationResult.error) {
       return res
@@ -79,6 +117,10 @@ const login = async (req, res, next) => {
 
     if (!existingUser.validPassword(password)) {
       return res.status(401).json({ message: "Email or password is wrong" });
+    }
+
+    if (!existingUser.verify) {
+      return res.status(401).json({ message: "Email is not verified" });
     }
 
     const payload = {
@@ -176,10 +218,7 @@ const upload = multer({
 
 const avatars = async (req, res, next) => {
   const { path: temporaryName, originalname } = req.file;
-  // req.file.path (pełna ścieżka do ładowanego pliku) zostaje przypisana do zmiennej temporaryName,
-  // a req.file.originalname do zmiennej originalname
   const fileName = path.join(uploadDir, originalname);
-  // pełna ścieżka do docelowego miejsca, gdzie plik zostanie zapisany ('public/avatars')
   const { token, email } = req.user;
   const { user } = req;
   const username = email.split("@")[0];
@@ -206,6 +245,53 @@ const avatars = async (req, res, next) => {
   }
 };
 
+const verify = async (req, res, next) => {
+  try {
+    const { verificationToken } = req.params;
+
+    const exisitingUser = await findUserByToken(verificationToken);
+    if (!exisitingUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await verifyUser({ verificationToken });
+
+    return res.status(200).json({ message: "Verification successful" });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const resendVerificationEmail = async (req, res, next) => {
+  const { email } = req.body;
+  try {
+    const userValidationResult = recheckUserSchema.validate({
+      email,
+    });
+
+    if (userValidationResult.error) {
+      return res
+        .status(400)
+        .json({ message: userValidationResult.error.message });
+    }
+
+    const existingUser = await findUser(email);
+    const { verificationToken, verify } = existingUser;
+
+    if (existingUser && verify === true) {
+      return res
+        .status(400)
+        .json({ message: "Verification has already been passed" });
+    }
+
+    await sendVerificationEmail(email, verificationToken);
+
+    return res.status(200).json({ message: "Verification email sent" });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
@@ -217,4 +303,6 @@ module.exports = {
   uploadDir,
   storeImage,
   createPublic,
+  verify,
+  resendVerificationEmail,
 };
